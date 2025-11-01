@@ -1,4 +1,5 @@
 // index.js
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -84,6 +85,47 @@ app.post('/api/explain-more', upload.single('document'), async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send('Error processing document.');
+  }
+});
+
+// --- Translation API ---
+app.post('/api/translate', async (req, res) => {
+  try {
+    const { text, targetLanguage } = req.body;
+
+    if (!text || !targetLanguage) {
+      return res.status(400).send('Missing text or target language.');
+    }
+
+    const languageNames = {
+      ta: 'Tamil',
+      si: 'Sinhala',
+      ru: 'Russian',
+      zh: 'Chinese',
+    };
+
+    const targetLanguageName = languageNames[targetLanguage] || targetLanguage;
+
+    const prompt = `
+      Translate the following text to ${targetLanguageName}. 
+      Maintain the same formatting, structure, and markdown elements (headers, bullet points, bold text, etc.).
+      Keep technical terms accurate.
+
+      Text to translate:
+      """
+      ${text}
+      """
+
+      Provide ONLY the translated text without any additional explanations or comments.
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    res.json({ translatedText: response.text() });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Error translating text.');
   }
 });
 

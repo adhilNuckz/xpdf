@@ -3,7 +3,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 
-const API_BASE_URL = 'http://localhost:4000';
+// Use production URL if deployed, otherwise localhost for development
+const API_BASE_URL = import.meta.env.PROD 
+  ? 'https://xpdf.nuckz.live'
+  : 'http://localhost:4000';
 
 function App() {
   const [file, setFile] = useState(null);
@@ -13,6 +16,12 @@ function App() {
   const [loadingSimple, setLoadingSimple] = useState(false);
   const [loadingDetailed, setLoadingDetailed] = useState(false);
   const [terminalText, setTerminalText] = useState('');
+  const [translatedSimple, setTranslatedSimple] = useState('');
+  const [translatedDetailed, setTranslatedDetailed] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [copiedSimple, setCopiedSimple] = useState(false);
+  const [copiedDetailed, setCopiedDetailed] = useState(false);
 
   useEffect(() => {
     // Terminal boot sequence
@@ -62,6 +71,7 @@ function App() {
     setLoadingSimple(true);
     setSimpleExplanation('');
     setDetailedExplanation('');
+    setTranslatedSimple('');
     setTerminalText((prev) => prev + '\n> EXECUTING: SIMPLE ANALYSIS\n> AI PROCESSING...\n');
 
     try {
@@ -90,6 +100,7 @@ function App() {
     setLoadingDetailed(true);
     setSimpleExplanation('');
     setDetailedExplanation('');
+    setTranslatedDetailed('');
     setTerminalText((prev) => prev + '\n> EXECUTING: DEEP ANALYSIS\n> NEURAL NETWORK ACTIVE...\n');
 
     try {
@@ -105,6 +116,61 @@ function App() {
       setLoadingDetailed(false);
     }
   };
+
+  const handleCopy = async (text, type) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (type === 'simple') {
+        setCopiedSimple(true);
+        setTerminalText((prev) => prev + '> TEXT COPIED TO CLIPBOARD\n');
+        setTimeout(() => setCopiedSimple(false), 2000);
+      } else {
+        setCopiedDetailed(true);
+        setTerminalText((prev) => prev + '> TEXT COPIED TO CLIPBOARD\n');
+        setTimeout(() => setCopiedDetailed(false), 2000);
+      }
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      setTerminalText((prev) => prev + '> ERROR: COPY FAILED\n');
+    }
+  };
+
+  const handleTranslate = async (text, type) => {
+    if (selectedLanguage === 'en') {
+      setTerminalText((prev) => prev + '> ALREADY IN ENGLISH\n');
+      return;
+    }
+
+    setIsTranslating(true);
+    setTerminalText((prev) => prev + `\n> TRANSLATING TO ${languages.find(l => l.code === selectedLanguage)?.name.toUpperCase()}...\n`);
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/translate`, {
+        text,
+        targetLanguage: selectedLanguage,
+      });
+      
+      if (type === 'simple') {
+        setTranslatedSimple(res.data.translatedText);
+      } else {
+        setTranslatedDetailed(res.data.translatedText);
+      }
+      setTerminalText((prev) => prev + '> TRANSLATION COMPLETE\n');
+    } catch (error) {
+      console.error('Error translating:', error);
+      setTerminalText((prev) => prev + '> ERROR: TRANSLATION FAILED\n');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const languages = [
+    { code: 'en', name: 'English' },
+    { code: 'ta', name: 'Tamil' },
+    { code: 'si', name: 'Sinhala' },
+    { code: 'ru', name: 'Russian' },
+    { code: 'zh', name: 'Chinese' },
+  ];
 
   const renderMarkdown = (text) => {
     // Enhanced markdown rendering with better formatting
@@ -348,9 +414,47 @@ function App() {
         <div className="output-container simple-output">
           <div className="output-header">
             <span className="output-title">▸ SIMPLE ANALYSIS RESULT</span>
+            <div className="output-actions">
+              <button
+                className={`action-btn copy-btn ${copiedSimple ? 'copied' : ''}`}
+                onClick={() => handleCopy(translatedSimple || simpleExplanation, 'simple')}
+              >
+                {copiedSimple ? '✓ COPIED' : '📋 COPY'}
+              </button>
+            </div>
           </div>
           <div className="output-body">
-            {renderMarkdown(simpleExplanation)}
+            {renderMarkdown(translatedSimple || simpleExplanation)}
+          </div>
+          <div className="translate-section">
+            <div className="translate-controls">
+              <select
+                className="language-select"
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+              >
+                {languages.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="translate-btn"
+                onClick={() => handleTranslate(simpleExplanation, 'simple')}
+                disabled={isTranslating || selectedLanguage === 'en'}
+              >
+                {isTranslating ? '⟳ TRANSLATING...' : '🌐 TRANSLATE'}
+              </button>
+              {translatedSimple && (
+                <button
+                  className="reset-btn"
+                  onClick={() => setTranslatedSimple('')}
+                >
+                  ↻ SHOW ORIGINAL
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -359,9 +463,47 @@ function App() {
         <div className="output-container detailed-output">
           <div className="output-header">
             <span className="output-title">▸ DEEP ANALYSIS RESULT</span>
+            <div className="output-actions">
+              <button
+                className={`action-btn copy-btn ${copiedDetailed ? 'copied' : ''}`}
+                onClick={() => handleCopy(translatedDetailed || detailedExplanation, 'detailed')}
+              >
+                {copiedDetailed ? '✓ COPIED' : '📋 COPY'}
+              </button>
+            </div>
           </div>
           <div className="output-body">
-            {renderMarkdown(detailedExplanation)}
+            {renderMarkdown(translatedDetailed || detailedExplanation)}
+          </div>
+          <div className="translate-section">
+            <div className="translate-controls">
+              <select
+                className="language-select"
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+              >
+                {languages.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="translate-btn"
+                onClick={() => handleTranslate(detailedExplanation, 'detailed')}
+                disabled={isTranslating || selectedLanguage === 'en'}
+              >
+                {isTranslating ? '⟳ TRANSLATING...' : '🌐 TRANSLATE'}
+              </button>
+              {translatedDetailed && (
+                <button
+                  className="reset-btn"
+                  onClick={() => setTranslatedDetailed('')}
+                >
+                  ↻ SHOW ORIGINAL
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
